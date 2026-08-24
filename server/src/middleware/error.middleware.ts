@@ -1,9 +1,15 @@
-import type { ErrorRequestHandler } from 'express';
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import type { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { env } from '../config/env.js';
 import { AppError } from '../lib/errors.js';
 
-export const errorMiddleware: ErrorRequestHandler = (error, _req, res, _next) => {
+export const errorHandler = (
+  error: Error,
+  req: Request,
+  res: Response,
+  _next: NextFunction
+): void => {
   console.error(error);
 
   if (error instanceof AppError) {
