@@ -3,7 +3,7 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import { env } from './config/env.js';
-import { errorMiddleware } from './middleware/error.middleware.js';
+import { errorHandler } from './middleware/error.middleware.js';
 import { createAuthRouter } from './routes/auth.routes.js';
 
 export function createApp() {
@@ -24,7 +24,7 @@ export function createApp() {
   });
 
   app.use('/api/auth', createAuthRouter());
-  app.use(errorMiddleware);
+  app.use(errorHandler);
 
   return app;
 }

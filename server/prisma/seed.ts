@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcrypt';
 import { faker } from '@faker-js/faker';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -116,7 +116,7 @@ async function main() {
         ${faker.location.streetAddress()},
         ${faker.location.city()},
         ${faker.phone.number()},
-        ARRAY[${Prisma.join(cuisines)}]::text[],
+        ${cuisines}::text[],
         ${'09:00:00'}::time,
         ${'23:00:00'}::time,
         true,
