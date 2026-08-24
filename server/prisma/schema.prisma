@@ -1,0 +1,287 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  customer
+  owner
+  staff
+  admin
+}
+
+enum TableShape {
+  circle
+  rectangle
+}
+
+enum TableStatus {
+  available
+  occupied
+  reserved
+  held
+  maintenance
+}
+
+enum BookingStatus {
+  pending
+  confirmed
+  seated
+  completed
+  cancelled
+}
+
+enum OrderType {
+  dine_in
+  takeaway
+  pre_order
+}
+
+enum OrderStatus {
+  pending
+  confirmed
+  preparing
+  ready
+  served
+  paid
+}
+
+enum OrderItemStatus {
+  pending
+  preparing
+  ready
+  served
+}
+
+enum SplitSessionStatus {
+  open
+  locked
+  paid
+}
+
+enum PaymentStatus {
+  pending
+  paid
+}
+
+model User {
+  id                 String             @id @default(uuid()) @db.Uuid
+  name               String
+  email              String             @unique
+  password_hash      String
+  phone              String
+  role               UserRole
+  dietary_pref       String[]           @default([])
+  refresh_token_hash String?
+  created_at         DateTime           @default(now())
+  restaurants        Restaurant[]       @relation("RestaurantOwner")
+  held_tables        DiningTable[]      @relation("HeldTables")
+  bookings           Booking[]
+  orders             Order[]
+  order_items        OrderItem[]
+  split_sessions     SplitSession[]     @relation("SplitSessionCreator")
+  split_participants SplitParticipant[]
+  reviews            Review[]
+
+  @@map("users")
+}
+
+model Restaurant {
+  id              String         @id @default(uuid()) @db.Uuid
+  owner_id        String         @db.Uuid
+  name            String
+  slug            String         @unique
+  description     String
+  address         String
+  city            String
+  phone           String
+  cuisine_type    String[]       @default([])
+  opening_time    DateTime       @db.Time(0)
+  closing_time    DateTime       @db.Time(0)
+  is_active       Boolean        @default(true)
+  total_tables    Int
+  avg_rating      Float          @default(0)
+  location        Unsupported("geography(Point,4326)")
+  owner           User           @relation("RestaurantOwner", fields: [owner_id], references: [id], onDelete: Restrict)
+  floors          RestaurantFloor[]
+  tables          DiningTable[]
+  menu_categories MenuCategory[]
+  menu_items      MenuItem[]
+  bookings        Booking[]
+  orders          Order[]
+  reviews         Review[]
+
+  @@map("restaurants")
+}
+
+model RestaurantFloor {
+  id             String       @id @default(uuid()) @db.Uuid
+  restaurant_id  String       @db.Uuid
+  name           String
+  floor_order    Int
+  restaurant     Restaurant   @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  tables         DiningTable[]
+
+  @@map("restaurant_floors")
+}
+
+model DiningTable {
+  id             String       @id @default(uuid()) @db.Uuid
+  restaurant_id  String       @db.Uuid
+  floor_id       String       @db.Uuid
+  table_number   String
+  capacity       Int
+  min_capacity   Int
+  position_x     Float
+  position_y     Float
+  shape          TableShape
+  rotation       Int
+  features       String[]     @default([])
+  qr_code        String       @unique
+  status         TableStatus
+  held_by        String?      @db.Uuid
+  held_until     DateTime?
+  version        Int          @default(0)
+  restaurant     Restaurant   @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  floor          RestaurantFloor @relation(fields: [floor_id], references: [id], onDelete: Cascade)
+  held_user      User?        @relation("HeldTables", fields: [held_by], references: [id], onDelete: SetNull)
+  bookings       Booking[]
+  orders         Order[]
+
+  @@map("tables")
+}
+
+model MenuCategory {
+  id             String     @id @default(uuid()) @db.Uuid
+  restaurant_id  String     @db.Uuid
+  name           String
+  display_order  Int
+  is_active      Boolean    @default(true)
+  restaurant     Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  menu_items     MenuItem[]
+
+  @@map("menu_categories")
+}
+
+model MenuItem {
+  id             String      @id @default(uuid()) @db.Uuid
+  category_id    String      @db.Uuid
+  restaurant_id  String      @db.Uuid
+  name           String
+  description    String
+  price          Int
+  image_url      String
+  is_veg         Boolean
+  is_available   Boolean     @default(true)
+  is_fresh_today Boolean     @default(false)
+  calories       Int
+  allergens      String[]    @default([])
+  tags           String[]    @default([])
+  prep_time_min  Int
+  category       MenuCategory @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  restaurant     Restaurant  @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  order_items    OrderItem[]
+
+  @@map("menu_items")
+}
+
+model Booking {
+  id               String        @id @default(uuid()) @db.Uuid
+  restaurant_id    String        @db.Uuid
+  table_id         String        @db.Uuid
+  user_id          String        @db.Uuid
+  booking_date     DateTime      @db.Date
+  start_time       DateTime      @db.Time(0)
+  end_time         DateTime      @db.Time(0)
+  party_size       Int
+  status           BookingStatus
+  special_requests String
+  restaurant       Restaurant    @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  table            DiningTable   @relation(fields: [table_id], references: [id], onDelete: Restrict)
+  user             User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  orders           Order[]
+
+  @@map("bookings")
+}
+
+model Order {
+  id             String        @id @default(uuid()) @db.Uuid
+  restaurant_id  String        @db.Uuid
+  table_id       String        @db.Uuid
+  booking_id     String?       @db.Uuid
+  user_id        String        @db.Uuid
+  type           OrderType
+  status         OrderStatus
+  total_amount   Int
+  is_split       Boolean       @default(false)
+  restaurant     Restaurant    @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  table          DiningTable   @relation(fields: [table_id], references: [id], onDelete: Restrict)
+  booking        Booking?      @relation(fields: [booking_id], references: [id], onDelete: SetNull)
+  user           User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  order_items    OrderItem[]
+  split_sessions SplitSession[]
+  reviews        Review[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id           String          @id @default(uuid()) @db.Uuid
+  order_id     String          @db.Uuid
+  menu_item_id String          @db.Uuid
+  user_id      String          @db.Uuid
+  quantity     Int
+  unit_price   Int
+  notes        String
+  status       OrderItemStatus
+  order        Order           @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  menu_item    MenuItem        @relation(fields: [menu_item_id], references: [id], onDelete: Restrict)
+  user         User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("order_items")
+}
+
+model SplitSession {
+  id           String             @id @default(uuid()) @db.Uuid
+  order_id     String             @db.Uuid
+  created_by   String             @db.Uuid
+  share_code   String             @unique
+  status       SplitSessionStatus
+  order        Order              @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  creator      User               @relation("SplitSessionCreator", fields: [created_by], references: [id], onDelete: Cascade)
+  participants SplitParticipant[]
+
+  @@map("split_sessions")
+}
+
+model SplitParticipant {
+  id                String        @id @default(uuid()) @db.Uuid
+  session_id        String        @db.Uuid
+  user_id           String        @db.Uuid
+  amount_owed       Int
+  payment_status    PaymentStatus
+  razorpay_order_id String
+  session           SplitSession  @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  user              User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("split_participants")
+}
+
+model Review {
+  id             String     @id @default(uuid()) @db.Uuid
+  restaurant_id  String     @db.Uuid
+  user_id        String     @db.Uuid
+  order_id       String     @db.Uuid
+  rating         Int
+  comment        String
+  created_at     DateTime   @default(now())
+  restaurant     Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  user           User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  order          Order      @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@map("reviews")
+}
